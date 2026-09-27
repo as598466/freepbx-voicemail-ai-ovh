@@ -39,4 +39,14 @@ final class VoicemailParserTest extends TestCase
         self::assertNull($voicemail->mailbox);
         self::assertSame('Message de 0612345678', $voicemail->body);
     }
+
+    public function testMailboxIsOnlyReadFromAsteriskMessageId(): void
+    {
+        $raw = "From: vm@pbx.example.com\nTo: pager@example.com\nMessage-ID: <1234-1001-42@example.com>\n\nTest\n";
+
+        $voicemail = (new VoicemailParser())->parse($raw);
+
+        self::assertSame('<1234-1001-42@example.com>', $voicemail->messageId);
+        self::assertNull($voicemail->mailbox);
+    }
 }

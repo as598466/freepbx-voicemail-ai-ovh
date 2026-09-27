@@ -23,6 +23,17 @@ use VoicemailAi\Transcription\TranscriptionException;
 
 final class ApplicationTest extends TestCase
 {
+    /** @var list<string> */
+    private array $temporaryDirectories = [];
+
+    protected function tearDown(): void
+    {
+        foreach ($this->temporaryDirectories as $directory) {
+            array_map('unlink', glob($directory . '/*') ?: []);
+            rmdir($directory);
+        }
+    }
+
     public function testSendsEnrichedEmailWithTranscription(): void
     {
         $output = $this->runApplication($this->succeedingTranscriber(), $this->fixture());
@@ -137,6 +148,75 @@ final class ApplicationTest extends TestCase
         self::assertSame($raw, $this->runApplication($this->succeedingTranscriber(), $raw));
     }
 
+    public function testShowsWhenNoSpeechIsDetected(): void
+    {
+        $output = quoted_printable_decode($this->runApplication($this->transcriberReturning(''), $this->fixture()));
+
+        self::assertStringContainsString('X-Voicemail-Transcription: ok', $output);
+        self::assertStringContainsString('Aucune parole détectée', $output);
+    }
+
+    public function testEscapesCallerAndTranscriptInHtml(): void
+    {
+        $raw = str_replace('X-Asterisk-CallerIDName: Marie Martin', 'X-Asterisk-CallerIDName: <b>Marie</b>', $this->fixture());
+
+        $output = quoted_printable_decode(
+            $this->runApplication($this->transcriberReturning('<script>alert(1)</script>'), $raw),
+        );
+        $html = (string) strstr((string) strstr($output, '<!DOCTYPE html>'), '</html>', true);
+
+        self::assertStringContainsString('&lt;script&gt;alert(1)&lt;/script&gt;', $html);
+        self::assertStringContainsString('Nouveau message de &lt;b&gt;Marie&lt;/b&gt;', $html);
+        self::assertStringNotContainsString('<script>', $html);
+        self::assertStringNotContainsString('<b>', $html);
+    }
+
+    public function testSendsEnrichedEmailWithSendmail(): void
+    {
+        $sendmail = $this->fakeSendmail();
+
+        $this->runApplication(
+            $this->succeedingTranscriber(),
+            $this->fixture(),
+            sendmail: $sendmail,
+            envelopeSender: 'bounce@example.com',
+        );
+
+        $calls = $this->sendmailCalls($sendmail);
+        self::assertCount(1, $calls);
+        self::assertContains('-t', $calls[0]['arguments']);
+        self::assertContains('-fbounce@example.com', $calls[0]['arguments']);
+        self::assertStringContainsString('X-Voicemail-Transcription: ok', $calls[0]['stdin']);
+        self::assertStringContainsString('To: Jean Dupont <jean.dupont@example.com>', $calls[0]['stdin']);
+    }
+
+    public function testForwardsOriginalEmailWhenSendmailRejectsEnrichedEmail(): void
+    {
+        $raw = $this->fixture();
+        $sendmail = $this->fakeSendmail(failOn: 'X-Voicemail-Transcription');
+
+        $this->runApplication($this->succeedingTranscriber(), $raw, sendmail: $sendmail);
+
+        $calls = $this->sendmailCalls($sendmail);
+        self::assertCount(2, $calls);
+        self::assertSame(['-t', '-oi'], $calls[1]['arguments']);
+        self::assertSame($raw, $calls[1]['stdin']);
+    }
+
+    public function testFailsWhenOriginalEmailCannotBeForwarded(): void
+    {
+        $sendmail = $this->fakeSendmail(failOn: 'From:');
+
+        $this->runApplication(
+            $this->succeedingTranscriber(),
+            $this->fixture(),
+            sendmail: $sendmail,
+            expectedExitCode: Application::EXIT_FAILURE,
+        );
+
+        self::assertCount(2, $this->sendmailCalls($sendmail));
+    }
+
     public function testFailsOnEmptyInput(): void
     {
         $output = $this->runApplication(
@@ -155,9 +235,12 @@ final class ApplicationTest extends TestCase
         ?string $templateDirectory = null,
         ?MailProfiles $mailProfiles = null,
         int $expectedExitCode = Application::EXIT_SUCCESS,
+        ?string $sendmail = null,
+        ?string $envelopeSender = null,
     ): string {
-        $output = fopen('php://memory', 'w+');
-        self::assertIsResource($output);
+        // With a sendmail binary the email is really "sent", otherwise it is written to a dry-run output.
+        $output = $sendmail === null ? fopen('php://memory', 'w+') : null;
+        $sendmail ??= '/usr/sbin/sendmail';
 
         $processRunner = new ProcessRunner();
 
@@ -167,16 +250,21 @@ final class ApplicationTest extends TestCase
             transcriber: $transcriber,
             mailer: new VoicemailMailer(
                 renderer: new TemplateRenderer(),
-                sendmailPath: '/usr/sbin/sendmail',
+                sendmailPath: $sendmail,
+                envelopeSender: $envelopeSender,
                 templateDirectory: $templateDirectory ?? dirname(__DIR__) . '/templates',
             ),
-            forwarder: new RawMailForwarder($processRunner, '/usr/sbin/sendmail', $output),
+            forwarder: new RawMailForwarder($processRunner, $sendmail, $output),
             logger: new NullLogger(),
             mailProfiles: $mailProfiles ?? new MailProfiles(new MailProfile(attachAudio: $attachAudio)),
             output: $output,
         );
 
         self::assertSame($expectedExitCode, $application->run($raw));
+
+        if ($output === null) {
+            return '';
+        }
 
         rewind($output);
 
@@ -193,6 +281,18 @@ final class ApplicationTest extends TestCase
         };
     }
 
+    private function transcriberReturning(string $text): TranscriberInterface
+    {
+        return new class ($text) implements TranscriberInterface {
+            public function __construct(private readonly string $text) {}
+
+            public function transcribe(AudioFile $audio): Transcript
+            {
+                return new Transcript($this->text);
+            }
+        };
+    }
+
     private function failingTranscriber(): TranscriberInterface
     {
         return new class implements TranscriberInterface {
@@ -201,6 +301,45 @@ final class ApplicationTest extends TestCase
                 throw new TranscriptionException('HTTP 503');
             }
         };
+    }
+
+    /**
+     * Fake sendmail recording each call in its directory, failing (exit 75) when stdin contains $failOn.
+     */
+    private function fakeSendmail(?string $failOn = null): string
+    {
+        $directory = sys_get_temp_dir() . '/vmai-test-' . bin2hex(random_bytes(6));
+        mkdir($directory);
+        $this->temporaryDirectories[] = $directory;
+
+        $script = $directory . '/sendmail';
+        file_put_contents($script, sprintf(<<<'SH'
+            #!/bin/sh
+            call="$(dirname "$0")/call-$(ls "$(dirname "$0")" | grep -c '^call-.*\.stdin$')"
+            printf '%%s\n' "$@" > "$call.args"
+            cat > "$call.stdin"
+            if [ -n %1$s ] && grep -qF -- %1$s "$call.stdin"; then exit 75; fi
+            SH, escapeshellarg($failOn ?? '')));
+        chmod($script, 0o755);
+
+        return $script;
+    }
+
+    /**
+     * @return list<array{arguments: list<string>, stdin: string}>
+     */
+    private function sendmailCalls(string $sendmail): array
+    {
+        $calls = [];
+
+        for ($call = 0; is_file($prefix = sprintf('%s/call-%d', dirname($sendmail), $call)) || is_file($prefix . '.stdin'); $call++) {
+            $calls[] = [
+                'arguments' => file($prefix . '.args', FILE_IGNORE_NEW_LINES) ?: [],
+                'stdin' => (string) file_get_contents($prefix . '.stdin'),
+            ];
+        }
+
+        return $calls;
     }
 
     private function fixture(): string
