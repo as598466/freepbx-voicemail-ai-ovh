@@ -85,6 +85,7 @@ final readonly class VoicemailMailer
             'voicemail' => $voicemail,
             'transcript' => $transcript,
             'attachment' => $attachment,
+            'profile' => $profile,
         ];
 
         $mail->isHTML(true);

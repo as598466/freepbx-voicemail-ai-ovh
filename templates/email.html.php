@@ -6,6 +6,7 @@
  * @var VoicemailAi\Mail\Voicemail $voicemail
  * @var VoicemailAi\Transcription\Transcript|null $transcript
  * @var VoicemailAi\Audio\AudioFile|null $attachment
+ * @var VoicemailAi\Mail\MailProfile $profile
  * @var Closure(mixed): string $e HTML escaping helper
  */
 
@@ -26,8 +27,8 @@ $caller = $voicemail->caller();
         <td align="center" style="padding:24px 12px;">
             <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:600px;background-color:#ffffff;border-radius:8px;overflow:hidden;">
                 <tr>
-                    <td style="background-color:#1e3a5f;padding:20px 24px;color:#ffffff;">
-                        <div style="font-size:13px;letter-spacing:1px;text-transform:uppercase;opacity:0.8;">Messagerie vocale</div>
+                    <td style="background-color:<?= $e($profile->headerColor) ?>;padding:20px 24px;color:#ffffff;">
+                        <div style="font-size:13px;letter-spacing:1px;text-transform:uppercase;opacity:0.8;"><?= $e($profile->headerTitle) ?></div>
                         <div style="font-size:20px;font-weight:bold;margin-top:4px;">
                             <?= $caller !== null ? 'Nouveau message de ' . $e($caller) : 'Nouveau message vocal' ?>
                         </div>

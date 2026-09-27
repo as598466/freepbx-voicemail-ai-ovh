@@ -9,10 +9,16 @@ namespace VoicemailAi\Mail;
  */
 final readonly class MailProfile
 {
+    public const DEFAULT_HEADER_TITLE = 'Messagerie vocale';
+
+    public const DEFAULT_HEADER_COLOR = '#1e3a5f';
+
     public function __construct(
         public ?string $fromAddress = null,
         public ?string $fromName = null,
         public string $subjectPrefix = '',
         public bool $attachAudio = true,
+        public string $headerTitle = self::DEFAULT_HEADER_TITLE,
+        public string $headerColor = self::DEFAULT_HEADER_COLOR,
     ) {}
 }

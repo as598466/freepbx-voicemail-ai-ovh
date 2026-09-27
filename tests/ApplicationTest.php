@@ -78,6 +78,22 @@ final class ApplicationTest extends TestCase
         self::assertStringNotContainsString('filename=msg0000.wav', $output);
     }
 
+    public function testRendersHeaderOfTheMailbox(): void
+    {
+        $profiles = new MailProfiles(
+            new MailProfile(),
+            ['1001' => new MailProfile(headerTitle: 'Société <A>', headerColor: '#b91c1c')],
+        );
+
+        $output = quoted_printable_decode(
+            $this->runApplication($this->succeedingTranscriber(), $this->fixture(), mailProfiles: $profiles),
+        );
+
+        self::assertStringContainsString('background-color:#b91c1c;', $output);
+        self::assertStringContainsString('Société &lt;A&gt;</div>', $output);
+        self::assertStringNotContainsString('#1e3a5f', $output);
+    }
+
     public function testUsesGlobalMailSettingsForOtherMailboxes(): void
     {
         $profiles = new MailProfiles(

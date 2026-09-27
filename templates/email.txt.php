@@ -6,6 +6,7 @@
  * @var VoicemailAi\Mail\Voicemail $voicemail
  * @var VoicemailAi\Transcription\Transcript|null $transcript
  * @var VoicemailAi\Audio\AudioFile|null $attachment
+ * @var VoicemailAi\Mail\MailProfile $profile
  */
 
 declare(strict_types=1);

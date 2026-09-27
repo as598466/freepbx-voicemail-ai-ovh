@@ -122,6 +122,8 @@ repris : `mail.subject_prefix` ajoute un préfixe au sujet, et `mail.from_addres
 | `mail.envelope_sender`  | `null`                                              | Expéditeur d'enveloppe (`sendmail -f`)         |
 | `mail.subject_prefix`   | `''`                                                | Préfixe ajouté au sujet, ex. `'[Répondeur] '`  |
 | `mail.attach_audio`     | `true`                                              | Joindre l'enregistrement (toujours joint si la transcription échoue) |
+| `mail.header_title`     | `Messagerie vocale`                                 | Titre du bandeau en haut de l'e-mail HTML      |
+| `mail.header_color`     | `#1e3a5f`                                           | Couleur du bandeau, en hexadécimal (`#rgb` ou `#rrggbb`) |
 | `mail.mailboxes`        | `[]`                                                | Réglages propres à une boîte vocale (voir ci-dessous) |
 | `log.ident`             | `voicemail-ai`                                      | Identifiant syslog (`journalctl -t`)           |
 | `log.debug`             | `false`                                             | Journaux détaillés                             |
@@ -133,7 +135,7 @@ La colonne « Défaut » donne la valeur utilisée quand la clé est absente de 
 Si le standard gère plusieurs numéros, chacun routé vers sa propre boîte vocale, `mail.mailboxes`
 permet d'adapter l'e-mail à chaque boîte. La clé est le numéro de la boîte (`${VM_MAILBOX}`,
 lu dans le `Message-ID` généré par Asterisk). La valeur peut remplacer `from_address`,
-`from_name`, `subject_prefix` et `attach_audio`. Les clés absentes reprennent les valeurs
+`from_name`, `subject_prefix`, `attach_audio`, `header_title` et `header_color`. Les clés absentes reprennent les valeurs
 globales de la section `mail` :
 
 ```php
@@ -142,6 +144,8 @@ globales de la section `mail` :
         'from_address' => 'messagerie@societe-a.example',
         'from_name' => 'Messagerie Société A',
         'subject_prefix' => '[SAV] ',
+        'header_title' => 'Société A',
+        'header_color' => '#b91c1c',
     ],
     '2000' => [
         'from_address' => 'messagerie@societe-b.example',
@@ -151,7 +155,7 @@ globales de la section `mail` :
 ],
 ```
 
-Une option inconnue fait échouer le chargement de la configuration : les messages sont alors
+Une option inconnue ou une couleur invalide fait échouer le chargement de la configuration : les messages sont alors
 transmis sans enrichissement, jamais perdus.
 
 Un autre fichier de configuration peut être passé avec `--config=/chemin/config.php` ou la

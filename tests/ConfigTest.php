@@ -28,6 +28,8 @@ final class ConfigTest extends TestCase
         self::assertNull($config->mailProfiles->default->fromAddress);
         self::assertSame('', $config->mailProfiles->default->subjectPrefix);
         self::assertTrue($config->mailProfiles->default->attachAudio);
+        self::assertSame('Messagerie vocale', $config->mailProfiles->default->headerTitle);
+        self::assertSame('#1e3a5f', $config->mailProfiles->default->headerColor);
         self::assertSame([], $config->mailProfiles->mailboxes);
         self::assertSame('voicemail-ai', $config->logIdent);
         self::assertFalse($config->debug);
@@ -91,6 +93,29 @@ final class ConfigTest extends TestCase
         $this->expectExceptionMessage('Unknown option(s) "html_template" for mailbox "1001"');
 
         Config::fromArray(['mail' => ['mailboxes' => ['1001' => ['html_template' => '/tmp/x.php']]]]);
+    }
+
+    public function testMailboxCanOverrideHeader(): void
+    {
+        $config = Config::fromArray([
+            'mail' => [
+                'header_title' => 'Répondeur',
+                'mailboxes' => ['1001' => ['header_color' => '#B91C1C']],
+            ],
+        ]);
+
+        $profile = $config->mailProfiles->for('1001');
+
+        self::assertSame('Répondeur', $profile->headerTitle);
+        self::assertSame('#B91C1C', $profile->headerColor);
+    }
+
+    public function testRejectsInvalidHeaderColor(): void
+    {
+        $this->expectException(ConfigurationException::class);
+        $this->expectExceptionMessage('Invalid mail header color "red;display:none"');
+
+        Config::fromArray(['mail' => ['header_color' => 'red;display:none']]);
     }
 
     public function testRejectsMailboxThatIsNotAnArray(): void

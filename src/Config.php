@@ -24,6 +24,8 @@ final readonly class Config
         'from_name',
         'subject_prefix',
         'attach_audio',
+        'header_title',
+        'header_color',
     ];
 
     public function __construct(
@@ -129,14 +131,28 @@ final readonly class Config
 
     /**
      * @param array<string, mixed> $mail
+     *
+     * @throws ConfigurationException
      */
     private static function mailProfile(array $mail): MailProfile
     {
+        $headerColor = self::string($mail['header_color'] ?? null) ?? MailProfile::DEFAULT_HEADER_COLOR;
+
+        // The color is inserted in an inline CSS style: only accept hexadecimal notations.
+        if (preg_match('/^#(?:[0-9a-f]{3}|[0-9a-f]{6})$/i', $headerColor) !== 1) {
+            throw new ConfigurationException(sprintf(
+                'Invalid mail header color "%s", expected a hexadecimal color such as "#1e3a5f".',
+                $headerColor,
+            ));
+        }
+
         return new MailProfile(
             fromAddress: self::string($mail['from_address'] ?? null),
             fromName: self::string($mail['from_name'] ?? null),
             subjectPrefix: (string) ($mail['subject_prefix'] ?? ''),
             attachAudio: (bool) ($mail['attach_audio'] ?? true),
+            headerTitle: self::string($mail['header_title'] ?? null) ?? MailProfile::DEFAULT_HEADER_TITLE,
+            headerColor: $headerColor,
         );
     }
 

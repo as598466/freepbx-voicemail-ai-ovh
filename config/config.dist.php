@@ -46,9 +46,12 @@ return [
         'subject_prefix' => '',
         // Attach the recording (MP3) to the email. It is always attached when the transcription fails.
         'attach_audio' => true,
+        // Small title and background color (hexadecimal) of the banner at the top of the HTML email.
+        'header_title' => 'Messagerie vocale',
+        'header_color' => '#1e3a5f',
         // Per voicemail box overrides (box number = ${VM_MAILBOX}), e.g. one per phone number.
-        // Allowed keys: from_address, from_name, subject_prefix, attach_audio. Missing keys keep
-        // the values above.
+        // Allowed keys: from_address, from_name, subject_prefix, attach_audio, header_title,
+        // header_color. Missing keys keep the values above.
         'mailboxes' => [
             // '1001' => [
             //     'from_address' => 'sav@example.com',
